@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>Local Multiplayer Games Night Ranking</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            font: 100%/1.4 system-ui, sans-serif;
+        }
+
+        body {
+            margin: 0;
+        }
+
+        a {
+            color: currentColor;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #wrapper {
+            width: 100%;
+            padding: 0 1rem;
+            max-width: 70ch;
+            margin: 1rem auto;
+        }
+
+        .intro h2 {
+            margin: 0 0 0.5rem 0;
+        }
+
+        .intro button {
+            float: right;
+            vertical-align: middle;
+        }
+
+        .intro:nth-child(3) {
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #bbb;
+            margin-bottom: 2rem;
+        }
+
+        .intro textarea {
+            display: block;
+            width: 100%;
+            resize: vertical;
+            background-color: #f4f4f4;
+            font-size: 100%;
+            font-family: ui-monospace, monospace;
+            line-height: 1.25;
+            min-height: 8rem;
+            padding: 0.1em 0.25em;
+            margin-bottom: 0.5rem;
+        }
+
+        .intro #add-custom {
+            float: none;
+        }
+
+        #main-table {
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        #main-table #battle-number p {
+            text-align: center;
+            margin: 0 0 0.25rem 0;
+        }
+
+        #main-table ul {
+            display: flex;
+            justify-content: space-between;
+            padding: 0;
+        }
+
+        #main-table li {
+            flex-basis: 32%;
+            min-height: 8rem;
+            border: 1px solid #bbb;
+            padding: 0.5em;
+            list-style: none;
+            text-align: center;
+            display: grid;
+            cursor: pointer;
+            user-select: none;
+            transition: border 0.2s ease;
+        }
+
+        #main-table li:hover {
+            border-color: #888;
+        }
+
+        #main-table li p {
+            width: 100%;
+            align-self: center;
+            margin: 8px;
+        }
+
+        #result-field ol {
+            width: 100%;
+            margin: 0 auto;
+            counter-reset: ranking 0;
+        }
+
+        #result-field li {
+            padding-left: 0.5rem;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 0.25rem;
+            padding-bottom: 0.25rem;
+            counter-increment: ranking;
+        }
+
+        #result-field li::marker {
+            color: #000;
+            content: counter(ranking) ".";
+        }
+
+        @media all and (min-width: 60em) {
+            #wrapper {
+                margin-top: 3rem;
+            }
+
+            #main-table,
+            #result-field ol {
+                width: 60%;
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+<div id="wrapper">
+
+<!--    <div class="intro">-->
+<!--        <h2>-->
+<!--            <span>Ok, how do I use this?</span>-->
+<!--            <button class="toggle-detail">show&hairsp;/&hairsp;hide</button>-->
+<!--        </h2>-->
+
+<!--        <div class="text hidden">-->
+<!--            <p>Just click on the name of whichever game you like more! If you love or hate both games equally, or simply-->
+<!--                dont know either of the games, click "I feel the same way about both".</p>-->
+<!--            <p>Using this sorter can take between 127 and 448 "battles", so please make yourself comfortable and take-->
+<!--                care of any responsibilities prior to starting your sorting.</p>-->
+<!--        </div>-->
+<!--    </div>-->
+
+<!--    <div class="intro">-->
+<!--        <h2>-->
+<!--            <span>I'd like to use my own terms!</span>-->
+<!--            <button class="toggle-detail">show&hairsp;/&hairsp;hide</button>-->
+<!--        </h2>-->
+
+<!--        <div class="text hidden">-->
+<!--            <p>It is possible! Just add them to the text field, one word per line. And if you'd like to reset to the <a-->
+<!--                    href="#" class="set-link" data-terms="games">default games</a>, you can do that, too.</p>-->
+<!--            <textarea id="custom-words"></textarea>-->
+<!--            <button id="add-custom">Use</button>-->
+<!--        </div>-->
+<!--    </div>-->
+
+    <div id="main-table">
+        <div>
+            <h2>Games Night Ranking</h2>
+        </div>
+        <div id="battle-number"></div>
+        <ul>
+            <li id="left-field" class="sort-field" data-amount="-1"></li>
+            <li id="middle-field" class="sort-field" data-amount="0"><p>I feel the same way about both</p></li>
+            <li id="right-field" class="sort-field" data-amount="1"></li>
+        </ul>
+    </div>
+
+    <div id="result-field"></div>
+
+    <button onclick="ranks.reset()">Reset</button>
+
+    <script>
+        'use strict';
+
+        class ranking {
+
+            constructor(entries, gamesMetadata, controls) {
+                this.gamesMetadata = gamesMetadata;
+                this.reset(entries, controls);
+            }
+
+            reset(entries, controls) {
+                if (entries) this.namMember = entries;
+                if (this.namMember === null || this.namMember.length < 2) {
+                    console.error('You need to provide an array of strings to be sorted!');
+                    return;
+                }
+                this.lstMember = [];
+                this.parent = [];
+                this.equal = [];
+                this.rec = [];
+                this.cmp1 = null;
+                this.cmp2 = null;
+                this.head1 = null;
+                this.head2 = null;
+                this.nrec = null;
+
+                this.numQuestion = null;
+                this.totalSize = null;
+                this.finishSize = null;
+                this.finishFlag = null;
+
+                if (controls) this.controls = controls;
+                if (this.controls === null) {
+                    console.error('You need to provide control elements!');
+                    return;
+                }
+
+                this.controls.result.classList.add('hidden');
+                this.controls.main.classList.remove('hidden');
+
+                // hook up buttons
+                const self = this;
+                let buttons = [
+                    this.controls.left,
+                    this.controls.center,
+                    this.controls.right
+                ];
+
+                buttons.forEach(function (ele, i) {
+                    // attach reference to class object
+                    ele.rankingClass = self;
+
+                    ele.setAttribute('data-amount', i - 1);
+                    ele.addEventListener('click', self.handleClick, false);
+                });
+
+                this.initList();
+                this.showImage();
+            }
+
+            handleClick(event) {
+                event.preventDefault();
+                const amount = parseInt(event.target.dataset.amount);
+
+                if (this.rankingClass.finishFlag === 0) {
+                    this.rankingClass.sortList(amount);
+                }
+            }
+
+            initList() {
+                let n = 0;
+                let mid;
+                let i;
+
+                // sequence to be sorted
+                this.lstMember[n] = [];
+                for (let i = 0; i < this.namMember.length; i++) {
+                    this.lstMember[n][i] = i;
+                }
+                this.parent[n] = -1;
+                this.totalSize = 0;
+                n += 1;
+
+                for (let i = 0; i < this.lstMember.length; i++) {
+                    if (this.lstMember[i].length >= 2) {
+                        mid = Math.ceil(this.lstMember[i].length / 2);
+                        this.lstMember[n] = [];
+                        this.lstMember[n] = this.lstMember[i].slice(0, mid);
+                        this.totalSize += this.lstMember[n].length;
+                        this.parent[n] = i;
+                        n += 1;
+                        this.lstMember[n] = [];
+                        this.lstMember[n] = this.lstMember[i].slice(mid, this.lstMember[i].length);
+                        this.totalSize += this.lstMember[n].length;
+                        this.parent[n] = i;
+                        n += 1;
+                    }
+                }
+
+                // storage array
+                for (let i = 0; i < this.namMember.length; i++) {
+                    this.rec[i] = 0;
+                }
+                this.nrec = 0;
+
+                for (let i = 0; i <= this.namMember.length; i++) {
+                    this.equal[i] = -1;
+                }
+
+                this.cmp1 = this.lstMember.length - 2;
+                this.cmp2 = this.lstMember.length - 1;
+                this.head1 = 0;
+                this.head2 = 0;
+                // this.numQuestion = 1;
+                this.finishSize = 0;
+                this.finishFlag = 0;
+            }
+
+            sortList(flag) {
+                let str;
+
+                if (this.lstMember.length === 1) {
+                    console.warn('Already done sorting!');
+                    return;
+                }
+
+                // save the rec
+                if (flag < 0) {
+                    this.rec[this.nrec] = this.lstMember[this.cmp1][this.head1];
+                    this.head1++;
+                    this.nrec++;
+                    this.finishSize++;
+                    while (this.equal[this.rec[this.nrec - 1]] !== -1) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp1][this.head1];
+                        this.head1++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                } else if (flag > 0) {
+                    this.rec[this.nrec] = this.lstMember[this.cmp2][this.head2];
+                    this.head2++;
+                    this.nrec++;
+                    this.finishSize++;
+                    while (this.equal[this.rec[this.nrec - 1]] !== -1) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp2][this.head2];
+                        this.head2++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                } else {
+                    this.rec[this.nrec] = this.lstMember[this.cmp1][this.head1];
+                    this.head1++;
+                    this.nrec++;
+                    this.finishSize++;
+                    while (this.equal[this.rec[this.nrec - 1]] !== -1) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp1][this.head1];
+                        this.head1++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                    this.equal[this.rec[this.nrec - 1]] = this.lstMember[this.cmp2][this.head2];
+                    this.rec[this.nrec] = this.lstMember[this.cmp2][this.head2];
+                    this.head2++;
+                    this.nrec++;
+                    this.finishSize++;
+                    while (this.equal[this.rec[this.nrec - 1]] !== -1) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp2][this.head2];
+                        this.head2++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                }
+
+                // processing after it has finished scanning the list of one
+                if (this.head1 < this.lstMember[this.cmp1].length && this.head2 === this.lstMember[this.cmp2].length) {
+                    // cmp2 list is scanned - copy the rest of the list cmp1
+                    while (this.head1 < this.lstMember[this.cmp1].length) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp1][this.head1];
+                        this.head1++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                } else if (this.head1 === this.lstMember[this.cmp1].length && this.head2 < this.lstMember[this.cmp2].length) {
+                    // cmp1 list is scanned - copy the rest of the list cmp2
+                    while (this.head2 < this.lstMember[this.cmp2].length) {
+                        this.rec[this.nrec] = this.lstMember[this.cmp2][this.head2];
+                        this.head2++;
+                        this.nrec++;
+                        this.finishSize++;
+                    }
+                }
+
+                // if you reach the end of the list of both
+                // I want to update the parent list
+                if (this.head1 === this.lstMember[this.cmp1].length && this.head2 === this.lstMember[this.cmp2].length) {
+                    for (let i = 0; i < this.lstMember[this.cmp1].length + this.lstMember[this.cmp2].length; i++) {
+                        this.lstMember[this.parent[this.cmp1]][i] = this.rec[i];
+                    }
+                    this.lstMember.pop();
+                    this.lstMember.pop();
+                    this.cmp1 = this.cmp1 - 2;
+                    this.cmp2 = this.cmp2 - 2;
+                    this.head1 = 0;
+                    this.head2 = 0;
+
+                    // initialize the rec before you make a new comparison
+                    if (this.head1 === 0 && this.head2 === 0) {
+                        for (let i = 0; i < this.namMember.length; i++) {
+                            this.rec[i] = 0;
+                        }
+                        this.nrec = 0;
+                    }
+                }
+
+                if (this.cmp1 < 0) {
+                    str = '<p>Battle No. ' + (this.numQuestion - 1) + '</p><p>' + Math.floor(this.finishSize * 100 / this.totalSize) + '% sorted.</p>';
+                    this.controls.status.innerHTML = str;
+
+                    this.showResult();
+                    this.finishFlag = 1;
+                } else {
+                    this.showImage();
+                }
+            }
+
+            showResult() {
+                let ranking = 1;
+                let sameRank = 1;
+                let str = "";
+                let i;
+
+                str += "<ol>";
+
+                for (i = 0; i < this.namMember.length; i++) {
+                    str += '<li data-rank="' + ranking + '">' + this.namMember[this.lstMember[0][i]] + '</li>';
+                    if (i < this.namMember.length - 1) {
+                        if (this.equal[this.lstMember[0][i]] === this.lstMember[0][i + 1]) {
+                            sameRank++;
+                        } else {
+                            ranking += sameRank;
+                            sameRank = 1;
+                        }
+                    }
+                }
+                str += "</ol>";
+
+                this.controls.main.classList.add('hidden');
+                this.controls.result.classList.remove('hidden');
+                this.controls.result.innerHTML = str;
+            }
+
+            showImage() {
+                let str0 = '<p>' + Math.floor(this.finishSize * 100 / this.totalSize) + '% sorted.</p>';
+                let str1 = '' + this.toNameFace(this.lstMember[this.cmp1][this.head1]);
+                let platform1 = this.gamesMetadata[str1].platform;
+                let maxPlayers1 = this.gamesMetadata[str1].maxPlayers;
+                let str2 = '' + this.toNameFace(this.lstMember[this.cmp2][this.head2]);
+                let platform2 = this.gamesMetadata[str2].platform;
+                let maxPlayers2 = this.gamesMetadata[str2].maxPlayers;
+
+                this.controls.status.innerHTML = str0;
+                this.controls.left.innerHTML = '<p><strong>' + str1 + '</strong></p><p>Platform: ' + platform1 + '</p><p>Max Players: ' + maxPlayers1 + '</p>' ;
+                this.controls.right.innerHTML = '<p><strong>' + str2 + '</strong></p><p>Platform: ' + platform2 + '</p><p>Max Players: ' + maxPlayers2 + '</p>' ;
+
+                this.numQuestion++;
+            }
+
+            toNameFace(n) {
+				return this.namMember[n];
+            }
+        }
+
+
+        const controls = {
+            'main': document.querySelector('#main-table'),
+            'status': document.querySelector('#battle-number'),
+            'left': document.querySelector('#left-field'),
+            'center': document.querySelector('#middle-field'),
+            'right': document.querySelector('#right-field'),
+            'result': document.querySelector('#result-field')
+        };
+
+        const defaultGames = [
+            "Super Smash Bros Melee",
+            "TowerFall",
+            "Bushido Blade",
+            "Crash Team Racing",
+            "Halo",
+            "Halo 2",
+            "Soul Calibur 2",
+            "Mario Kart 64",
+            "Super Smash Bros",
+            "Tekken 3",
+            "Trap Gunner",
+            "Twisted Metal Black",
+            "Burnout 3: Takedown",
+            "Teenage Mutant Ninja Turtles: Turtles in Time",
+            "Goldeneye",
+            "Timesplitters Future Perfect",
+            "Mario Kart Double Dash",
+            "Perfect Dark",
+            "Zombies Ate my Neighbors",
+            "Def Jam: Fight for NY",
+            "James Bond 007: Nightfire",
+            "Final Fantasy Crystal Chronicles",
+            "Wu-Tang: Shaolin Style",
+            "Diddy Kong Racing",
+            "Bomberman Party Edition",
+            "Crash Bash",
+            "Future Cop L.A.P.D",
+            "Quake II",
+            "Silent Bomber",
+            "Metal Warriors",
+            "Pocky and Rocky",
+            "Ultimate Mortal Kombat 3",
+            "Custom Robo",
+            "Super Monkey Ball 2",
+            "Baldur’s Gate: Dark Alliance"
+        ];
+
+        const gamesMetadata = {
+            "Super Smash Bros Melee": {"platform": "GameCube", "maxPlayers": 4},
+            "TowerFall": {"platform": "PC", "maxPlayers": 4},
+            "Bushido Blade": {"platform": "PS1", "maxPlayers": 2},
+            "Crash Team Racing": {"platform": "PS1", "maxPlayers": 4},
+            "Halo": {"platform": "Xbox", "maxPlayers": 4},
+            "Halo 2": {"platform": "Xbox", "maxPlayers": 4},
+            "Soul Calibur 2": {"platform": "GameCube", "maxPlayers": 2},
+            "Mario Kart 64": {"platform": "N64", "maxPlayers": 4},
+            "Super Smash Bros": {"platform": "N64", "maxPlayers": 4},
+            "Tekken 3": {"platform": "PS1", "maxPlayers": 2},
+            "Trap Gunner": {"platform": "PS1", "maxPlayers": 2},
+            "Twisted Metal Black": {"platform": "PS2", "maxPlayers": 4},
+            "Burnout 3: Takedown": {"platform": "Xbox", "maxPlayers": 2},
+            "Teenage Mutant Ninja Turtles: Turtles in Time": {"platform": "SNES", "maxPlayers": 2},
+            "Goldeneye": {"platform": "N64", "maxPlayers": 4},
+            "Timesplitters Future Perfect": {"platform": "GameCube", "maxPlayers": 4},
+            "Mario Kart Double Dash": {"platform": "GameCube", "maxPlayers": 4},
+            "Perfect Dark": {"platform": "N64", "maxPlayers": 4},
+            "Zombies Ate my Neighbors": {"platform": "SNES", "maxPlayers": 2},
+            "Def Jam: Fight for NY": {"platform": "Xbox OR PS2", "maxPlayers": 4},
+            "James Bond 007: Nightfire": {"platform": "GameCube", "maxPlayers": 4},
+            "Final Fantasy Crystal Chronicles": {"platform": "GameCube", "maxPlayers": 4},
+            "Wu-Tang: Shaolin Style": {"platform": "PS1", "maxPlayers": 4},
+            "Diddy Kong Racing": {"platform": "N64", "maxPlayers": 4},
+            "Bomberman Party Edition": {"platform": "PS1",  "maxPlayers": 5},
+            "Crash Bash": {"platform": "PS1", "maxPlayers": 4},
+            "Future Cop L.A.P.D": {"platform": "PS1", "maxPlayers": 4},
+            "Quake II": {"platform": "PS1", "maxPlayers": 4},
+            "Silent Bomber": {"platform": "PS1", "maxPlayers": 2},
+            "Metal Warriors": {"platform": "SNES", "maxPlayers": 2},
+            "Pocky and Rocky": {"platform": "SNES", "maxPlayers": 2},
+            "Ultimate Mortal Kombat 3": {"platform": "SNES", "maxPlayers": 2},
+            "Custom Robo": {"platform": "GameCube", "maxPlayers": 4},
+            "Super Monkey Ball 2": {"platform": "GameCube", "maxPlayers": 4},
+            "Baldur's Gate: Dark Alliance ": {"platform": "GameCube", "maxPlayers": 2}
+        };
+
+        const ranks = new ranking(defaultGames, gamesMetadata, controls);
+
+    </script>
+</div>
+</body>
+</html>
